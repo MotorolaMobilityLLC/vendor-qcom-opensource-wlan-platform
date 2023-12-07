@@ -104,6 +104,7 @@ typedef struct moto_product {
 
 static moto_product products_list[] = {
 	{"eqe",		"all",	NV_IPA},
+	{"malmo",	"all",	NV_IPA},
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
