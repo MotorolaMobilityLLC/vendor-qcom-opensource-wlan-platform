@@ -210,6 +210,9 @@ static int selectFileNameByProduct(struct cnss_plat_data *plat_priv, char *filen
 
 	num = num_of_products(products_list);
 	for (i = 0; i < num; i++) {
+		if (strlen(device_ptr) != strlen((products_list + i)->hw_device)) {
+			continue;
+		}
 		if (strncmp(device_ptr, (products_list+i)->hw_device, strlen((products_list+i)->hw_device)) == 0) {
 			if(strncmp(radio_ptr, (products_list+i)->hw_radio, strlen((products_list+i)->hw_radio)) == 0 ||
 				strncmp((products_list+i)->hw_radio, "all", strlen((products_list+i)->hw_radio)) == 0) {
