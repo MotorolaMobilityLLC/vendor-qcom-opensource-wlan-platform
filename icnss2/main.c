@@ -5041,9 +5041,11 @@ static int icnss_pm_suspend(struct device *dev)
 
 	icnss_pr_vdbg("PM Suspend, state: 0x%lx\n", priv->state);
 
+	// BEGIN IKSWU-122593, Fix the icnss can not suspend/resume issue
 	if (!priv->ops || !priv->ops->pm_suspend ||
-	    IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state) ||
+	    (priv->wpss_supported && IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state)) ||
 	    !test_bit(ICNSS_DRIVER_PROBED, &priv->state))
+	// END IKSWU-122593
 		return 0;
 
 	ret = priv->ops->pm_suspend(dev);
@@ -5079,9 +5081,11 @@ static int icnss_pm_resume(struct device *dev)
 
 	icnss_pr_vdbg("PM resume, state: 0x%lx\n", priv->state);
 
+	// BEGIN IKSWU-122593, Fix the icnss can not suspend/resume issue
 	if (!priv->ops || !priv->ops->pm_resume ||
-	    IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state) ||
+	    (priv->wpss_supported && IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state)) ||
 	    !test_bit(ICNSS_DRIVER_PROBED, &priv->state))
+	// END IKSWU-122593
 		goto out;
 
 	ret = priv->ops->pm_resume(dev);
@@ -5170,8 +5174,10 @@ static int icnss_pm_runtime_suspend(struct device *dev)
 		return -EINVAL;
 	}
 
+	// BEGIN IKSWU-122593, Fix the icnss can not suspend/resume issue
 	if (!priv->ops || !priv->ops->runtime_suspend ||
-	    IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state))
+	    (priv->wpss_supported && IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state)))
+	// END IKSWU-122593
 		goto out;
 
 	icnss_pr_vdbg("Runtime suspend\n");
@@ -5204,8 +5210,10 @@ static int icnss_pm_runtime_resume(struct device *dev)
 		return -EINVAL;
 	}
 
+	// BEGIN IKSWU-122593, Fix the icnss can not suspend/resume issue
 	if (!priv->ops || !priv->ops->runtime_resume ||
-	    IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state))
+	    (priv->wpss_supported && IS_ERR_OR_NULL(priv->smp2p_info[ICNSS_SMP2P_OUT_POWER_SAVE].smem_state)))
+	// END IKSWU-122593
 		goto out;
 
 	icnss_pr_vdbg("Runtime resume, state: 0x%lx\n", priv->state);
