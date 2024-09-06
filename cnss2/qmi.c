@@ -112,7 +112,7 @@ static moto_sku_radio_map_t moto_sku_radio_map_list[] = {
 };
 
 static moto_product products_list[] = {
-	{"rtwo",	"all",	NV_EPA},
+	{"leap",	"all",	NV_EPA},
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
