@@ -116,6 +116,8 @@ static moto_sku_radio_map_t moto_sku_radio_map_list[] = {
 
 static moto_product products_list[] = {
 	{"leap",	"all",	NV_EPA},
+	{"vantage",	"all",	NV_EPA},
+	{"vantg",	"all",	NV_EPA},
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
