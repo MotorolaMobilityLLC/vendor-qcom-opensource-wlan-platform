@@ -1397,6 +1397,14 @@ int icnss_wlfw_bdf_dnld_send_sync(struct icnss_priv *priv, u32 bdf_type)
 		goto err_req_fw;
 
 	ret = firmware_request_nowarn(&fw_entry, filename, &priv->pdev->dev);
+	if (ret && bdf_type == ICNSS_BDF_REGDB) {
+		icnss_pr_dbg("Failed to load %s, trying default regdb\n", filename);
+		memset(filename, 0, ICNSS_MAX_FILE_NAME);
+		icnss_add_fw_prefix_name(priv, filename, REGDB_FILE_NAME);
+		icnss_pr_dbg("Trying to load %s\n", filename);
+		ret = firmware_request_nowarn(&fw_entry, filename, &priv->pdev->dev);
+	}
+
 	if (ret) {
 		icnss_pr_err("Failed to load %s: %s ret:%d\n",
 			     icnss_bdf_type_to_str(bdf_type), filename, ret);
