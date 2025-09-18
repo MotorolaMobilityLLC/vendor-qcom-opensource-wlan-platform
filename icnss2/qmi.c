@@ -1333,8 +1333,7 @@ static int icnss_get_bdf_file_name(struct icnss_priv *priv,
 		}
 		break;
 	case ICNSS_BDF_REGDB:
-		snprintf(filename_tmp, filename_len, REGDB_FILE_NAME);
-		if (device_ptr[0] != '\0') {
+		if (get_moto_device() == 0 && device_ptr[0] != '\0') {
 			snprintf(filename_tmp, filename_len, "%s.%s", REGDB_FILE_NAME, device_ptr);
 		} else {
 			icnss_pr_dbg("device_ptr is not available yet, use default regdb file");
