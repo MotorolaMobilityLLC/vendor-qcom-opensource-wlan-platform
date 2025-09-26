@@ -118,6 +118,7 @@ static moto_product products_list[] = {
 	{"arcfox",      "ROW",  "row.epa"},
 	{"arcfox",      "JPN",  "jpn.epa"},
 	{"oberon",	"all",	NV_EPA}, //a19110 IKSWT-74269
+	{"eiger",	"all",	NV_EPA}, //IKSWW-53636
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
