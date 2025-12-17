@@ -1001,7 +1001,6 @@ static void cnss_mhi_debug_reg_dump(struct cnss_pci_data *pci_priv)
 {
 	if (cnss_pci_check_link_status(pci_priv))
 		return;
-
 	mhi_debug_reg_dump(pci_priv->mhi_ctrl);
 }
 
@@ -1239,10 +1238,9 @@ static void cnss_mhi_dump_sfr(struct cnss_pci_data *pci_priv)
 	info.rem_seg_len = mhi_buf[0].len - rddm_header->header_size;
 	for (n = 0; n < table_size; n++) {
 		table_info = &rddm_header->table_info[n];
-
 		if (!strcmp(table_info->file_name, "Q6-SFR.bin")) {
-			    info.file_size = table_info->size;
-			    cnss_mhi_process_sfr(rddm_image, &info);
+			info.file_size = table_info->size;
+			cnss_mhi_process_sfr(rddm_image, &info);
 			return;
 		}
 
