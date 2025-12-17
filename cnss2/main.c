@@ -26,6 +26,8 @@
 #if IS_ENABLED(CONFIG_QCOM_MINIDUMP)
 #include <soc/qcom/minidump.h>
 #endif
+#include <linux/pci.h>
+#include <linux/mhi.h>
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/component.h>
@@ -33,6 +35,7 @@
 #include "cnss_plat_ipc_qmi.h"
 #include "cnss_utils.h"
 #include "main.h"
+#include "pci.h"
 #include "bus.h"
 #include "debug.h"
 #include "genl.h"
@@ -116,6 +119,8 @@
 #define TSF_IRQ_TS_OP_OFFSET	0x0
 #define TSF_IRQ_TS_LO_OFFSET	0x4
 #define TSF_IRQ_TS_HI_OFFSET	0x8
+
+#define     MAX_SFR_LEN     (256)
 
 enum cnss_cal_db_op {
 	CNSS_CAL_DB_UPLOAD,
@@ -6258,6 +6263,7 @@ static ssize_t qdss_conf_download_store(struct device *dev,
 	cnss_pr_dbg("Received QDSS download config command\n");
 	return count;
 }
+
 static ssize_t tme_opt_file_download_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
@@ -6401,6 +6407,167 @@ static ssize_t user_config_show(struct device *dev,
 	return curr_len;
 }
 
+static void mot_mhi_process_sfr(struct image_info *rddm_image,
+				 struct file_info *info, u8 **sfr)
+{
+	struct mhi_buf *mhi_buf = rddm_image->mhi_buf;
+	u8 *sfr_base_buf, *sfr_cur_ptr;
+	u8 *file_offset = info->file_offset;
+	u32 file_size = info->file_size;
+	u32 rem_seg_len = info->rem_seg_len;
+	u32 seg_idx = info->seg_idx;
+
+	sfr_base_buf = kzalloc(file_size + 1, GFP_KERNEL);
+	if (!sfr_base_buf)
+		return;
+	sfr_cur_ptr = sfr_base_buf;
+
+	while (file_size) {
+		/* file offset starting from seg base */
+		if (!rem_seg_len) {
+			file_offset = mhi_buf[seg_idx].buf;
+			if (file_size > mhi_buf[seg_idx].len)
+				rem_seg_len = mhi_buf[seg_idx].len;
+			else
+				rem_seg_len = file_size;
+		}
+
+		if (file_size <= rem_seg_len) {
+			memcpy(sfr_cur_ptr, file_offset, file_size);
+			break;
+		}
+
+		memcpy(sfr_cur_ptr, file_offset, rem_seg_len);
+		sfr_cur_ptr += rem_seg_len;
+		file_size -= rem_seg_len;
+		rem_seg_len = 0;
+		seg_idx++;
+		if (seg_idx == rddm_image->entries) {
+			cnss_pr_err("invalid size for SFR file\n");
+			goto err;
+		}
+	}
+	sfr_base_buf[info->file_size] = '\0';
+	file_size = (info->file_size < MAX_SFR_LEN - 1) ? info->file_size : MAX_SFR_LEN - 1;
+	memcpy(*sfr, sfr_base_buf, file_size);
+	(*sfr)[file_size] = '\0';
+	cnss_pr_info("sfr:%s", *sfr);
+
+err:
+	kfree(sfr_base_buf);
+}
+
+static int mot_mhi_find_next_file_offset(struct image_info *rddm_image,
+					  struct file_info *info,
+					  struct rddm_table_info *table_info)
+{
+	struct mhi_buf *mhi_buf = rddm_image->mhi_buf;
+
+	if (info->rem_seg_len >= table_info->size) {
+		info->file_offset += table_info->size;
+		info->rem_seg_len -= table_info->size;
+		return 0;
+	}
+
+	info->file_size = table_info->size - info->rem_seg_len;
+	info->rem_seg_len = 0;
+	/* iterate over segments until eof is reached */
+	while (info->file_size) {
+		info->seg_idx++;
+		if (info->seg_idx == rddm_image->entries) {
+			cnss_pr_err("invalid size for file %s\n",
+				    table_info->file_name);
+			return -EINVAL;
+		}
+		if (info->file_size > mhi_buf[info->seg_idx].len) {
+			info->file_size -= mhi_buf[info->seg_idx].len;
+		} else {
+			info->file_offset = mhi_buf[info->seg_idx].buf +
+				info->file_size;
+			info->rem_seg_len = mhi_buf[info->seg_idx].len -
+				info->file_size;
+			info->file_size = 0;
+		}
+	}
+
+	return 0;
+}
+
+static void mot_mhi_dump_sfr(struct cnss_pci_data *pci_priv, u8 **sfr)
+{
+	struct image_info *rddm_image = pci_priv->mhi_ctrl->rddm_image;
+	struct mhi_buf *mhi_buf = rddm_image->mhi_buf;
+	struct rddm_header *rddm_header =
+		(struct rddm_header *)mhi_buf->buf;
+	struct rddm_table_info *table_info;
+	struct file_info info;
+	u32 table_size, n;
+
+	memset(&info, 0, sizeof(info));
+
+	if (rddm_header->header_size > sizeof(*rddm_header) ||
+	    rddm_header->header_size < 8) {
+		cnss_pr_err("invalid reported header size %u\n",
+			    rddm_header->header_size);
+		return;
+	}
+
+	table_size = (rddm_header->header_size - 8) / sizeof(*table_info);
+	if (!table_size) {
+		cnss_pr_err("invalid rddm table size %u\n", table_size);
+		return;
+	}
+
+	info.file_offset = (u8 *)rddm_header + rddm_header->header_size;
+	info.rem_seg_len = mhi_buf[0].len - rddm_header->header_size;
+	for (n = 0; n < table_size; n++) {
+		table_info = &rddm_header->table_info[n];
+		if (!strcmp(table_info->file_name, "Q6-SFR.bin")) {
+			info.file_size = table_info->size;
+			mot_mhi_process_sfr(rddm_image, &info, sfr);
+			return;
+		}
+
+		if (mot_mhi_find_next_file_offset(rddm_image, &info,
+						   table_info))
+			return;
+	}
+}
+
+static ssize_t sfr_show(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct cnss_plat_data *plat_priv = dev_get_drvdata(dev);
+	u32 buf_size = PAGE_SIZE;
+	u32 buf_written = 0;
+	struct cnss_pci_data *pci_priv = NULL;
+	u8 *sfr_str = NULL;
+
+	if (!plat_priv)
+		return -ENODEV;
+	pci_priv = (struct cnss_pci_data*)plat_priv->bus_priv;
+
+	sfr_str = kzalloc(MAX_SFR_LEN, GFP_KERNEL);
+	if (!sfr_str)
+		return -ENOMEM;
+
+	if (pci_priv) {
+		mot_mhi_dump_sfr(pci_priv, &sfr_str);
+	}
+	if (strlen(sfr_str) > 0){
+		cnss_pr_info("sfr:%s", sfr_str);
+		buf_written = scnprintf(buf, buf_size, "%s", sfr_str);
+	}
+	else {
+		buf_written = scnprintf(buf, buf_size, "sfr string empty, reason unknown");
+	}
+
+	kfree(sfr_str);
+
+	return buf_written;
+}
+
 static DEVICE_ATTR_WO(fs_ready);
 static DEVICE_ATTR_WO(shutdown);
 static DEVICE_ATTR_RW(recovery);
@@ -6413,6 +6580,7 @@ static DEVICE_ATTR_WO(hw_trace_override);
 static DEVICE_ATTR_WO(charger_mode);
 static DEVICE_ATTR_RW(time_sync_period);
 static DEVICE_ATTR_RW(user_config);
+static DEVICE_ATTR_RO(sfr);
 
 static struct attribute *cnss_attrs[] = {
 	&dev_attr_fs_ready.attr,
@@ -6427,6 +6595,7 @@ static struct attribute *cnss_attrs[] = {
 	&dev_attr_charger_mode.attr,
 	&dev_attr_time_sync_period.attr,
 	&dev_attr_user_config.attr,
+	&dev_attr_sfr.attr,
 	NULL,
 };
 
