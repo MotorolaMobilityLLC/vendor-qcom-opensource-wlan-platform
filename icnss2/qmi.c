@@ -125,6 +125,7 @@ typedef struct moto_product {
 
 static moto_product products_list[] = {
 	{"roadstr",	"all",	NV_IPA},
+	{"avr",	"all",	NV_IPA},
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
@@ -1297,7 +1298,7 @@ static int icnss_get_bdf_file_name(struct icnss_priv *priv,
 	case ICNSS_BDF_ELF:
 		//BEGIN Support loading different bdwlan.elf
 		if (selectFileNameByProduct(filename_tmp) > 0) {
-			icnss_pr_dbg("%s: Using %s for %s\n",
+			icnss_pr_info("%s: Using %s for %s\n",
 				__func__, filename_tmp, device_ptr);
 		} else if (priv->board_id == 0xFF)
 		//END Support loading different bdwlan.elf
