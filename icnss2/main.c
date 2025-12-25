@@ -56,6 +56,7 @@
 #include "debug.h"
 #include "power.h"
 #include "genl.h"
+#include <linux/pm_qos.h>
 
 #define MAX_PROP_SIZE			32
 #define NUM_LOG_PAGES			10
@@ -92,6 +93,7 @@ module_param(qmi_timeout, ulong, 0600);
 #define ICNSS_WPSS_SSR_TIMEOUT          5000
 #define ICNSS_CAL_TIMEOUT		40000
 
+static struct pm_qos_request pm_qos_req;
 static struct icnss_priv *penv;
 static struct work_struct wpss_loader;
 static struct work_struct wpss_ssr_work;
@@ -1482,6 +1484,27 @@ out:
 	return ret;
 }
 
+static void wlan_pm_qos_update(int new_value)
+{
+	static int last_value = -1;
+	int value = 0;
+
+	if (new_value == PM_QOS_DEFAULT_VALUE)
+		value = PM_QOS_DEFAULT_VALUE;
+
+	if (!cpu_latency_qos_request_active(&pm_qos_req))
+		cpu_latency_qos_add_request(&pm_qos_req, value);
+	else
+		cpu_latency_qos_update_request(&pm_qos_req, value);
+
+	if (last_value != new_value) {
+		last_value = new_value;
+		if (new_value == PM_QOS_DEFAULT_VALUE)
+			icnss_pr_err(" PM_QOS_DEFAULT_VALUE  ");
+		else
+			icnss_pr_err(" value = %d  ", new_value);
+	}
+}
 
 static int icnss_driver_event_fw_ready_ind(struct icnss_priv *priv, void *data)
 {
@@ -1518,6 +1541,8 @@ static int icnss_driver_event_fw_ready_ind(struct icnss_priv *priv, void *data)
 			icnss_setup_dms_mac(priv);
 		ret = icnss_call_driver_probe(priv);
 	}
+
+	wlan_pm_qos_update(PM_QOS_DEFAULT_VALUE);
 
 	icnss_vreg_unvote(priv);
 
@@ -1889,6 +1914,8 @@ static int icnss_fw_crashed(struct icnss_priv *priv,
 	struct icnss_uevent_fw_down_data fw_down_data = {0};
 
 	icnss_pr_dbg("FW crashed, state: 0x%lx\n", priv->state);
+
+	wlan_pm_qos_update(2);
 
 	set_bit(ICNSS_PD_RESTART, &priv->state);
 
