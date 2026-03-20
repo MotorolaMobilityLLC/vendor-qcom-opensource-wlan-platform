@@ -119,6 +119,7 @@ static moto_product products_list[] = {
 	{"vantage",	"all",	NV_EPA},
 	{"vantg",	"all",	NV_EPA},
 	{"blanc",	"all",	NV_EPA},
+	{"makalu",	"all",	NV_EPA},
 	/* Terminator */
 	{{0}, {0}, {0}},
 };
